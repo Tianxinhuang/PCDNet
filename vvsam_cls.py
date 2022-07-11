@@ -4,9 +4,9 @@ import numpy as np
 import os
 import getdata
 from encoders_decoders import *
-from ae_templates import sampling
 import copy
 import random
+from tf_ops.CD import tf_nndistance
 from tflearn.layers.normalization import batch_normalization
 from tensorflow.python.tools import inspect_checkpoint as chip
 DATA_DIR=getdata.getdir()
@@ -87,7 +87,7 @@ def train():
     is_training_pl = tf.placeholder(tf.bool, shape=())
     knum=int(sys.argv[1])
     with tf.variable_scope('sam'):
-        samplepts,_=movenet(pointcloud_pl,knum=knum,mlp1=[128,256,256],mlp2=[128,128])
+        samplepts,_=movenet(pointcloud_pl,knum=knum,mlp1=[128,256,256],mlp2=[128,128],startcen=None,infer=True)
     samplepts=project(samplepts,pointcloud_pl)
     samplepts=resample(samplepts,n_pc_points)
 
@@ -112,8 +112,7 @@ def train():
         sess.run(tf.assign(istrain[0],False))
         testfiles=getdata.getfile(os.path.join(DATA_DIR,'test_files.txt'))
 
-        chamfer_list=[]
-        cdm_list=[]
+        err_list=[]
         for i in range(len(testfiles)):
             testdata,label = getdata.load_h5label(os.path.join(DATA_DIR, testfiles[i]))
             testdata=get_normal(testdata,True)

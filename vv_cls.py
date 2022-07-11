@@ -5,7 +5,6 @@ import getdata
 #import tf_util
 import copy
 import random
-import point_choose
 import numpy as np
 
 from tf_ops.emd import tf_auctionmatch

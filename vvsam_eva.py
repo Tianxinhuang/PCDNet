@@ -9,7 +9,6 @@ from builtins import object
 from tf_ops.grouping.tf_grouping import group_point, knn_point
 import copy
 import random
-import point_choose
 from tflearn.layers.normalization import batch_normalization
 from tensorflow.python.tools import inspect_checkpoint as chip
 import time
@@ -97,6 +96,7 @@ def restore_into_scope(model_path, scope_name, sess):
 
 
 def train():
+    PT_NUM=2048
     start=0
     knum=int(sys.argv[1])
     num=PT_NUM
@@ -118,7 +118,7 @@ def train():
 
     count()
     with tf.variable_scope('sam'):
-        samplepts,_=movenet(pointcloud_pl,knum=knum,mlp1=[128,256,256],mlp2=[128,128],startcen=None) 
+        samplepts,_=movenet(pointcloud_pl,knum=knum,mlp1=[128,256,256],mlp2=[128,128],startcen=None,infer=True) 
     samplepts=project(samplepts,pointcloud_pl)
     samplepts=resample(samplepts,n_pc_points)
 

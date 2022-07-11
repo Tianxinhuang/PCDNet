@@ -83,15 +83,19 @@ def mlp_architecture_ala_iclr_18(n_pc_points, bneck_size, dnum, bneck_post_mlp=F
 
     return encoder, decoder, encoder_args, decoder_args
  
-def movenet(inpts,knum=64,mlp1=[128,128],mlp2=[128,128],startcen=None):
+def movenet(inpts,knum=64,mlp1=[128,128],mlp2=[128,128],startcen=None,infer=False):
     #with tf.variable_scope(scope):
     ptnum=inpts.get_shape()[1].value
     #_,startcen=sampling(knum,inpts,use_type='r')
     #_,allcen=sampling(ptnum,inpts,use_type='f')
     #_,startcen=sampling(knum,allcen,use_type='n')
     if startcen is None:
-        startcen=sampling(knum,inpts,use_type='f')[1] 
-    words=tf.expand_dims(startcen,axis=2)
+        if infer:
+            startcen=sampling(knum,inpts,use_type='f')[1] 
+        else:
+            _,allcen=sampling(ptnum,inpts,use_type='f')
+            _,startcen=sampling(knum,allcen,use_type='n')
+            words=tf.expand_dims(startcen,axis=2)
     inwords=tf.expand_dims(inpts,axis=2)
 
     for i,outchannel in enumerate(mlp1):

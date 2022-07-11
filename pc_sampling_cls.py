@@ -6,15 +6,14 @@ import getdata
 #import tf_util
 import copy
 import random
-import point_choose
 DATA_DIR=getdata.getdir()
 filelist=os.listdir(DATA_DIR)
 
-from tf_ops2.emd import tf_auctionmatch
-from tf_ops2.CD import tf_nndistance
-from tf_ops2.sampling import tf_sampling
-from ae_sam import mlp_architecture_ala_iclr_18,adaptive_loss_net,local_loss_net,local_loss_net2,cen_net,reverse_net,find_diff,FC_layer,mlp_architecture_sam,errnet,movenet
-from tf_ops2.grouping import tf_grouping
+from tf_ops.emd import tf_auctionmatch
+from tf_ops.CD import tf_nndistance
+from tf_ops.sampling import tf_sampling
+from ae_sam import mlp_architecture_ala_iclr_18,movenet
+from tf_ops.grouping import tf_grouping
 #query_ball_point, group_point
 from provider import shuffle_data,shuffle_points,rotate_point_cloud,jitter_point_cloud
 #from pointnet_cls import get_model,get_loss
@@ -141,28 +140,7 @@ def train():
             for i in range(2):
                 restore_into_scope(tf.train.latest_checkpoint('./pn_cls'), 'ge_'+str(i), sess)
             print('load completed')
-        #from tflearn import is_training
-        #is_training(True, session=sess)
-        #if os.path.exists('./CD_0.0001/checkpoint'):
-        #    print('here load')
-        #    tf.train.Saver(var_list=gevar).restore(sess, tf.train.latest_checkpoint('./CD_0.0001'))
-            #saver.restore(sess, tf.train.latest_checkpoint('./modelvv_sam/'))
 
-        #merged = tf.summary.merge_all()
-        #writer = tf.summary.FileWriter("logs/", sess.graph)
-        #klist=[]
-        sig=0
-        sig2=0
-        lastval=0
-        lastlocal=0
-        #oastrl=0
-        losse,lossd,lossd2=0,0,0
-        loss_global,loss_local,localzhengze,meanloss,reverloss,loss_local1,loss_local2=0,0,0,0,0,0,0
-        cyclenum=1
-        rlin=100
-        reverloss=100
-        lastrl=0
-        import time
         errlist=[]
         datalist=[]
         labelist=[]
@@ -180,7 +158,6 @@ def train():
             data,label=getdata.load_h5label(os.path.join(DATA_DIR, trainfiles[j]))
             datalist.append(data)
             labelist.append(label)
-        #tlist=[]
         for i in range(EPOCH_ITER_TIME):
             if i>0 and i%dypara==0:
                 for k in range(kknum):
@@ -189,67 +166,39 @@ def train():
             if i>0 and i%(2*dypara)==0:
                 for k in range(kknum):
                     errs=errlist[k]
-                    err=(max(errs)-min(errs))#/max(errs)
+                    err=(max(errs)-min(errs))/max(errs)
                     plist[k]=np.exp(err)
-                    print(err)
-                plist=plist/sum(plist)
+                    plist=plist/sum(plist)
                 for ii in range(len(kklist)):
                     errlist[ii]=[]
-                print(plist)
-            tlist=[]
             for j in range(FILE_NUM):
-                #traindata = getdata.load_h5(os.path.join(DATA_DIR, trainfiles[j]))
-                #traindata,label = getdata.load_h5label(os.path.join(DATA_DIR, trainfiles[j]))
                 traindata,label=datalist[j],labelist[j]
                 traindata,label,_=shuffle_data(traindata[:,:PT_NUM],label)
-                #colors = getdata.load_color(os.path.join(DATA_DIR, trainfiles[j]))
-                #print(colors)
-                #assert False
-                #traindata=concatenate([traindata,colors],axis=-1)
-                                
-                #random.shuffle(traindata)
-                #traindata.swapaxes(1,0)
-                #random.shuffle(traindata)
-                #traindata.swapaxes(1,0)
-
+                
                 allnum=int(len(traindata)/BATCH_SIZE)*BATCH_SIZE
                 batch_num=int(allnum/BATCH_SIZE)
                 
                 for batch in range(batch_num):
                     start_idx = (batch * BATCH_SIZE) % allnum
                     end_idx=(batch*BATCH_SIZE)%allnum+BATCH_SIZE
-                    #start_idx=0
-                    #end_idx=BATCH_SIZE
                     batch_point=traindata[start_idx:end_idx]
                     batch_point=shuffle_points(batch_point)
-                    #random.shuffle(batch_point)
-                    for ei in range(cyclenum):
-                        #kk=int(1024*np.random.rand(1)+64)
-                        #kk=np.power(2,int(5+6*np.random.rand(1)))
-                        idx=np.random.choice(len(kklist),1,p=list(plist))[0]
-                        #print(idx)
-                        kk=kklist[idx]
+                    idx=np.random.choice(len(kklist),1,p=list(plist))[0]
+                    kk=kklist[idx]
 
-                        feed_dict = {pointcloud_pl: batch_point,knum:kk,is_training_pl:False,label_pl:np.squeeze(label[start_idx:end_idx])}
-                        stime=time.time()
-                        resi = sess.run([trainstep[0],loss], feed_dict=feed_dict)
-                        etime=time.time()
-                        tlist.append(etime-stime)
-                        losse=resi[1]
+                    feed_dict = {pointcloud_pl: batch_point,knum:kk,is_training_pl:False,label_pl:np.squeeze(label[start_idx:end_idx])}
+                    resi = sess.run([trainstep[0],loss], feed_dict=feed_dict)
+                    losse=resi[1]
 
-                        if (i+1)%dypara==0:
-                            for kn in range(kknum):
-                                eperr[kn].append(sess.run(loss1, feed_dict={pointcloud_pl: batch_point,knum:kklist[kn],is_training_pl:False,label_pl:np.squeeze(label[start_idx:end_idx])}))
+                    if (i+1)%dypara==0:
+                        for kn in range(kknum):
+                            eperr[kn].append(sess.run(loss1, feed_dict={pointcloud_pl: batch_point,knum:kklist[kn],is_training_pl:False,label_pl:np.squeeze(label[start_idx:end_idx])}))
                     if (batch+1) % 16 == 0:
                         print('sample num', kk)
-                        print('mean time', mean(tlist))
                         print('epoch: %d '%i,'file: %d '%j,'batch: %d' %batch)
                         print('loss: ',resi[1])
-                        #assert False
-            #print('mean time', mean(tlist))
-                        
+                                                
             if (i+1)%100==0:
-                print('mean time', mean(tlist))
                 save_path = tf.train.Saver(var_list=var1).save(sess, './modelvv_samcls2/model',global_step=i)
 if __name__=='__main__':
     train()
