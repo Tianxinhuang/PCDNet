@@ -10,7 +10,7 @@ The codes for Resolution-free Point Cloud Sampling Network with Data Distillatio
 * numpy 1.14.5
 
 ## Dataset
-The adopted ShapeNet Part dataset is adopted following [AE](http://www.merl.com/research/license#FoldingNet), while the ModelNet10 and ModelNet40 datasets follow [PointNet](https://github.com/charlesq34/pointnet.git). Other datasets can also be used.
+The adopted ShapeNet Part dataset is adopted following [FoldingNet](http://www.merl.com/research/license#FoldingNet), while the ModelNet10 and ModelNet40 datasets follow [PointNet](https://github.com/charlesq34/pointnet.git). Other datasets can also be used.
 
 ## Usage
 
