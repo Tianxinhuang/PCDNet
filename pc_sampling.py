@@ -208,7 +208,6 @@ def train():
                 for k in range(kknum):
                     errs=errlist[k]
                     err=(max(errs)-min(errs))/max(errs)
-                    #err=(errs[0]-errs[1])/errs[0]
                     plist[k]=np.exp(err)
                     print(err)
                 plist=plist/sum(plist)
