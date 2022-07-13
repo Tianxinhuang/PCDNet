@@ -3,11 +3,11 @@ import numpy as np
 import os
 def getdir():
     #BASE_DIR=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    BASE_DIR='/htxnet/'
+    BASE_DIR='./'
     DATA_DIR=os.path.join(BASE_DIR,'data')
     return DATA_DIR
 def getspdir():
-    BASE_DIR='/htxnet/'#os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    BASE_DIR='./'#os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     DATA_DIR=os.path.join(BASE_DIR,'data')
     DATA_DIR=os.path.join(DATA_DIR,'hdf5_data')
     #print(DATA_DIR)
