@@ -158,6 +158,7 @@ def train():
             data,label=getdata.load_h5label(os.path.join(DATA_DIR, trainfiles[j]))
             datalist.append(data)
             labelist.append(label)
+        import copy
         for i in range(EPOCH_ITER_TIME):
             if i>0 and i%dypara==0:
                 for k in range(kknum):
@@ -172,7 +173,7 @@ def train():
                 for ii in range(len(kklist)):
                     errlist[ii]=[]
             for j in range(FILE_NUM):
-                traindata,label=datalist[j],labelist[j]
+                traindata,label=copy.deepcopy(datalist[j]),copy.deepcopy(labelist[j])
                 traindata,label,_=shuffle_data(traindata[:,:PT_NUM],label)
                 
                 allnum=int(len(traindata)/BATCH_SIZE)*BATCH_SIZE
