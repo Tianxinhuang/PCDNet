@@ -6,8 +6,6 @@ import getdata
 #import tf_util
 import copy
 import random
-DATA_DIR=getdata.getdir()
-filelist=os.listdir(DATA_DIR)
 
 from tf_ops.emd import tf_auctionmatch
 from tf_ops.CD import tf_nndistance
@@ -20,18 +18,6 @@ from provider import shuffle_data,shuffle_points,rotate_point_cloud,jitter_point
 from pointnet_cls import get_model,get_loss#,get_bn_decay
 from samplenet import SoftProjection,get_project_loss
 
-trainfiles=getdata.getfile(os.path.join(DATA_DIR,'train_files.txt'))
-#testfiles=getdata.getfile(os.path.join(DATA_DIR,'test_files.txt'))
-
-EPOCH_ITER_TIME=2000
-BATCH_ITER_TIME=5000
-BASE_LEARNING_RATE=0.01
-REGULARIZATION_RATE=0.0001
-BATCH_SIZE=16
-DECAY_STEP=1000*BATCH_SIZE
-DECAY_RATE=0.7
-PT_NUM=2048
-FILE_NUM=5
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
 tf.set_random_seed(1)
 def restore_into_scope(model_path, scope_name, sess):
@@ -74,20 +60,11 @@ def get_clssimplify_loss(sampts, data):
 def entropy_distillation(pred1,pred2,t):
     result=tf.reduce_mean(tf.reduce_sum(-tf.nn.softmax(pred1/t)*tf.log(tf.nn.softmax(pred2/t)+1e-5),axis=-1))*(t**2)
     return result
-def train():
-    n_pc_points=2048
-    ptnum=n_pc_points
-    bneck_size=512
-    featlen=64
-    mlp=[64]
-    mlp.append(2*featlen)
-    mlp2=[128,128]
-    cen_num=16
-    region_num=1
-    gregion=1
-    rnum=1
+
+#def train(ptnum=2048,tem=1.0,diswei=0.5):
+def train(args):
     dnum=3
-    pointcloud_pl=tf.placeholder(tf.float32,[BATCH_SIZE,PT_NUM,dnum],name='pointcloud_pl')
+    pointcloud_pl=tf.placeholder(tf.float32,[args.batch_size,args.ptnum,dnum],name='pointcloud_pl')
     label_pl=tf.placeholder(tf.int32,[None],name='label_pl')
     is_training_pl = tf.placeholder(tf.bool, shape=())
     knum=tf.placeholder(tf.float32,name='pointcloud_pl')
@@ -100,66 +77,61 @@ def train():
         pjloss=1.0*get_project_loss(pj)
 
     with tf.variable_scope('ge_0'):
-        #inpts=tf.reshape(inpts,[BATCH_SIZE,-1,3])
         pred, end_points = get_model(inpts, is_training_pl, bn_decay=None)
         loss1 = get_loss(pred, label_pl, end_points)
 
     with tf.variable_scope('ge_1'):
-        #inpts=tf.reshape(inpts,[BATCH_SIZE,-1,3])
         pred2, end_points = get_model(pointcloud_pl, is_training_pl, bn_decay=None)
         loss0 = get_loss(pred2, label_pl, end_points)
-    lossd = entropy_distillation(pred, pred2,1.0)
+    lossd = entropy_distillation(pred, pred2, args.tem)
 
-    loss_e=loss1+0.5*lossd+0.001*tf.reduce_mean(movelen)+get_aesimplify_loss(inpts,pointcloud_pl)+pjloss#+loss0#+0.1*KLs
+    loss_e=loss1+args.diswei*lossd+args.movewei*tf.reduce_mean(movelen)+args.simwei*get_aesimplify_loss(inpts,pointcloud_pl)+pjloss#+loss0#+0.1*KLs
     trainvars=tf.GraphKeys.GLOBAL_VARIABLES
         
     var1=tf.get_collection(trainvars,scope='sam')
-    regularizer=tf.contrib.layers.l2_regularizer(REGULARIZATION_RATE)
+    regularizer=tf.contrib.layers.l2_regularizer(0.0001)
     gezhengze=tf.reduce_sum([regularizer(v) for v in var1])
-    loss_e=loss_e+0.001*gezhengze#//////////////////
-    alldatanum=2048*FILE_NUM
+    loss_e=loss_e+args.reg*gezhengze
     trainstep=[]
-    #lr=tf.train.exponential_decay(0.01, global_step, (EPOCH_ITER_TIME*alldatanum)/(BATCH_SIZE*10), 0.96, staircase=True)
-    trainstep.append(tf.train.AdamOptimizer(learning_rate=0.0005).minimize(loss_e, global_step=global_step,var_list=var1))
+
+    trainstep.append(tf.train.AdamOptimizer(learning_rate=args.lr).minimize(loss_e, global_step=global_step,var_list=var1))
     loss=[loss_e,loss1]
 
     config=tf.ConfigProto(allow_soft_placement=True,log_device_placement=False)
-    #config.gpu_options.per_process_gpu_memory_fraction = 0.086
     config.gpu_options.allow_growth=True
     with tf.Session(config=config) as sess:
         gevar=tf.get_collection(trainvars,scope='ge')
-        #ge_saver=tf.train.Saver(var_list=gevar)
-
 
         saver = tf.train.Saver(max_to_keep=10)
         sess.run(tf.global_variables_initializer())
-        #tf.train.Saver(var_list=var3+var5).restore(sess, tf.train.latest_checkpoint('./best_lnfc/'))
-        if os.path.exists('./pn_cls/checkpoint'):
+        if os.path.exists(os.path.join(args.prepath,'checkpoint')):
             print('here load')
-            #tf.train.Saver(var_list=gevar).restore(sess, tf.train.latest_checkpoint('./modelvv_classify'))
             for i in range(2):
-                restore_into_scope(tf.train.latest_checkpoint('./pn_cls'), 'ge_'+str(i), sess)
+                restore_into_scope(tf.train.latest_checkpoint(args.prepath), 'ge_'+str(i), sess)
             print('load completed')
 
         errlist=[]
         datalist=[]
         labelist=[]
-        kklist=[np.power(2,v) for v in list(range(5,12))]
+        kklist=[np.power(2,v) for v in list(range(args.reso_start,args.reso_end))]
         kknum=len(kklist)
         #assert False
         plist=np.ones(kknum)/kknum
         eperr=[]
-        dypara=10
+        dypara=args.interval
         for i in range(len(kklist)):
             errlist.append([])
             eperr.append([])
-        for j in range(FILE_NUM):
-            #datalist.append(getdata.load_h5(os.path.join(DATA_DIR, trainfiles[j])))
-            data,label=getdata.load_h5label(os.path.join(DATA_DIR, trainfiles[j]))
+
+        trainfiles=getdata.getfile(os.path.join(args.filepath,'train_files.txt'))
+        filenum=len(trainfiles)
+
+        for j in range(filenum):
+            data,label=getdata.load_h5label(os.path.join(args.filepath, trainfiles[j]))
             datalist.append(data)
             labelist.append(label)
         import copy
-        for i in range(EPOCH_ITER_TIME):
+        for i in range(args.itertime):
             if i>0 and i%dypara==0:
                 for k in range(kknum):
                     errlist[k].append(np.mean(eperr[k]))
@@ -172,16 +144,16 @@ def train():
                     plist=plist/sum(plist)
                 for ii in range(len(kklist)):
                     errlist[ii]=[]
-            for j in range(FILE_NUM):
+            for j in range(filenum):
                 traindata,label=copy.deepcopy(datalist[j]),copy.deepcopy(labelist[j])
-                traindata,label,_=shuffle_data(traindata[:,:PT_NUM],label)
+                traindata,label,_=shuffle_data(traindata[:,:args.ptnum],label)
                 
-                allnum=int(len(traindata)/BATCH_SIZE)*BATCH_SIZE
-                batch_num=int(allnum/BATCH_SIZE)
+                allnum=int(len(traindata)/args.batch_size)*args.batch_size
+                batch_num=int(allnum/args.batch_size)
                 
                 for batch in range(batch_num):
-                    start_idx = (batch * BATCH_SIZE) % allnum
-                    end_idx=(batch*BATCH_SIZE)%allnum+BATCH_SIZE
+                    start_idx = (batch * args.batch_size) % allnum
+                    end_idx=(batch*args.batch_size)%allnum+args.batch_size
                     batch_point=traindata[start_idx:end_idx]
                     batch_point=shuffle_points(batch_point)
                     idx=np.random.choice(len(kklist),1,p=list(plist))[0]
@@ -194,12 +166,31 @@ def train():
                     if (i+1)%dypara==0:
                         for kn in range(kknum):
                             eperr[kn].append(sess.run(loss1, feed_dict={pointcloud_pl: batch_point,knum:kklist[kn],is_training_pl:False,label_pl:np.squeeze(label[start_idx:end_idx])}))
-                    if (batch+1) % 16 == 0:
+                    if (batch+1) % args.seestep == 0:
                         print('sample num', kk)
                         print('epoch: %d '%i,'file: %d '%j,'batch: %d' %batch)
                         print('loss: ',resi[1])
                                                 
-            if (i+1)%100==0:
-                save_path = tf.train.Saver(var_list=var1).save(sess, './modelvv_samcls2/model',global_step=i)
+            if (i+1)%args.savestep==0:
+                save_path = tf.train.Saver(var_list=var1).save(sess, os.path.join(args.savepath,'model'),global_step=i)
 if __name__=='__main__':
-    train()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ptnum', type=int, default=2048, help='The number of points')
+    parser.add_argument('--tem', type=float, default=1.0, help='The temperature of distillation')
+    parser.add_argument('--diswei', type=float, default=0.5, help='The weights of distillation')
+    parser.add_argument('--movewei', type=float, default=0.001, help='The weights of moving distances')
+    parser.add_argument('--simwei', type=float, default=1.0, help='The weights of simiplify loss')
+    parser.add_argument('--reso_start', type=int, default=5, help='Controlling the lowest resolution')
+    parser.add_argument('--reso_end', type=int, default=12, help='Controlling the highest resolution')
+    parser.add_argument('--interval', type=int, default=10, help='The interval of Dynamic resolution selection')
+    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
+    parser.add_argument('--savestep', type=int, default=100, help='The interval to save checkpoint')
+    parser.add_argument('--seestep', type=int, default=16, help='The batch interval to see training errors')
+    parser.add_argument('--itertime', type=int, default=1000, help='The number of epochs for iteration')
+    parser.add_argument('--filepath', type=str, default='./data', help='The path of h5 training data')
+    parser.add_argument('--savepath', type=str, default='./modelvv_samcls/', help='The path of saved checkpoint')
+    parser.add_argument('--prepath', type=str, default='./pn_cls/', help='The checkpoint path of the pretrained cls network')
+    parser.add_argument('--reg', type=float, default=0.001, help='The regularization parameter')
+    parser.add_argument('--lr', type=float, default=0.0005, help='The learning rate')
+    args=parser.parse_args()
+    train(args)

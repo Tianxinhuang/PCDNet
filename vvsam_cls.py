@@ -73,7 +73,7 @@ def resample(data,npts):
     data0=tf.expand_dims(data[:,0,:],axis=1)
     result=tf.concat([data,tf.tile(data0,[1,npts-now,1])],axis=1)
     return result
-def train():
+def evaluate():
     start=0
     num=2048
     n_pc_points=2048
@@ -135,4 +135,4 @@ def train():
 
         
 if __name__=='__main__':
-    train()
+    evaluate()

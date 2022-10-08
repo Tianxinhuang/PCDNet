@@ -95,7 +95,7 @@ def restore_into_scope(model_path, scope_name, sess):
     )
 
 
-def train():
+def evaluate():
     PT_NUM=2048
     start=0
     knum=int(sys.argv[1])
@@ -166,4 +166,4 @@ def train():
         f.close() 
 
 if __name__=='__main__':
-    train()
+    evaluate()
