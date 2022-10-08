@@ -91,7 +91,7 @@ def train(args):
 
     trainstep=[]
     trainstep.append(tf.train.AdamOptimizer(learning_rate=args.lr).minimize(loss_e, global_step=global_step,var_list=var1))
-    loss=[loss_e,pjloss]
+    loss=[loss_e]
 
     config=tf.ConfigProto(allow_soft_placement=True,log_device_placement=False)
     config.gpu_options.allow_growth=True
@@ -124,6 +124,7 @@ def train(args):
         for i in range(len(kklist)):
             errlist.append([])
             eperr.append([])
+
         for i in range(args.itertime):
             if i>0 and i%dypara==0:
                 for k in range(kknum):
@@ -144,7 +145,7 @@ def train(args):
                 ids=list(range(len(traindata)))
                 random.shuffle(ids)
                 traindata=traindata[ids,:,:]
-                traindata=shuffle_points(traindata[:,:PT_NUM])
+                traindata=shuffle_points(traindata[:,:args.ptnum])
                 
                 allnum=int(len(traindata)/args.batch_size)*args.batch_size
                 batch_num=int(allnum/args.batch_size)

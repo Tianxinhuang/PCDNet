@@ -95,18 +95,19 @@ def movenet(inpts,knum=64,mlp1=[128,128],mlp2=[128,128],startcen=None,infer=Fals
         else:
             _,allcen=sampling(ptnum,inpts,use_type='f')
             _,startcen=sampling(knum,allcen,use_type='n')
-            words=tf.expand_dims(startcen,axis=2)
+    words=tf.expand_dims(startcen,axis=2)
     inwords=tf.expand_dims(inpts,axis=2)
 
     for i,outchannel in enumerate(mlp1):
         inwords=conv2d('movein_state%d'%i,inwords,outchannel,[1,1],padding='VALID',activation_func=None)
         inwords=tf.nn.relu(inwords)
+
     inwords=tf.reduce_sum(inwords,axis=1,keepdims=True)/ptnum
-    #inwords=tf.reduce_mean(inwords,axis=1,keepdims=True)
 
     for i,outchannel in enumerate(mlp1):
         words=conv2d('mover_state%d'%i,words,outchannel,[1,1],padding='VALID',activation_func=None)
         words=tf.nn.relu(words)
+
     wordsfeat=words
     words=tf.reduce_sum(words,axis=1,keepdims=True)/ptnum
     #words=tf.reduce_mean(words,axis=1,keepdims=True)

@@ -9,13 +9,12 @@ import random
 from tf_ops.CD import tf_nndistance
 from tflearn.layers.normalization import batch_normalization
 from tensorflow.python.tools import inspect_checkpoint as chip
-DATA_DIR=getdata.getdir()
-filelist=os.listdir(DATA_DIR)
 import sys
 from tf_ops.sampling import tf_sampling
 
 from ae_sam import mlp_architecture_ala_iclr_18,movenet
 from pointnet_cls import get_model
+import argparse
 
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
@@ -53,14 +52,14 @@ def get_normal(data,cir=True):
         para=1/r
         result=np.expand_dims(para,axis=-1)*(data-cen)#+cen
     return result
-def project(pts,data):
+def project(pts,data,bsize):
     dist1, idx1, dist2, idx2 = tf_nndistance.nn_distance(pts, data)
-    result=getpts(data,idx1,pts.get_shape()[1].value)
+    result=getpts(data,idx1,pts.get_shape()[1].value, bsize)
     return result
-def getpts(pts,idx,knum):
+def getpts(pts,idx,knum, bsize):
     npoint=idx.get_shape()[1].value
-    ptid=tf.reshape(idx,[BATCH_SIZE,-1,1])
-    bid=tf.tile(tf.reshape(tf.range(start=0,limit=BATCH_SIZE,dtype=tf.int32),[-1,1,1]),[1,knum,1])
+    ptid=tf.reshape(idx,[bsize,-1,1])
+    bid=tf.tile(tf.reshape(tf.range(start=0,limit=bsize,dtype=tf.int32),[-1,1,1]),[1,knum,1])
     idx=tf.concat([bid,ptid],axis=-1)
     result=tf.gather_nd(pts,idx)
     return result
@@ -73,66 +72,78 @@ def resample(data,npts):
     data0=tf.expand_dims(data[:,0,:],axis=1)
     result=tf.concat([data,tf.tile(data0,[1,npts-now,1])],axis=1)
     return result
-def evaluate():
-    start=0
-    num=2048
-    n_pc_points=2048
-    bsize=32
-    k=1
-    mlp=[64,128]
-    mlp2=[128,128]
-    pointcloud_pl=tf.placeholder(tf.float32,[BATCH_SIZE,n_pc_points,3],name='pointcloud_pl')
-    outpts=tf.placeholder(tf.float32,[BATCH_SIZE,n_pc_points,3],name='outpts')
+def evaluate(args): 
+    pointcloud_pl=tf.placeholder(tf.float32,[args.batch_size,args.ptnum,3],name='pointcloud_pl')
+    outpts=tf.placeholder(tf.float32,[args.batch_size,args.ptnum,3],name='outpts')
     label_pl=tf.placeholder(tf.int32,[None],name='label_pl')
     is_training_pl = tf.placeholder(tf.bool, shape=())
-    knum=int(sys.argv[1])
+    
     with tf.variable_scope('sam'):
-        samplepts,_=movenet(pointcloud_pl,knum=knum,mlp1=[128,256,256],mlp2=[128,128],startcen=None,infer=True)
-    samplepts=project(samplepts,pointcloud_pl)
-    samplepts=resample(samplepts,n_pc_points)
+        samplepts,_=movenet(pointcloud_pl,knum=args.knum,mlp1=[128,256,256],mlp2=[128,128],startcen=None,infer=True)
+
+    samplepts=project(samplepts,pointcloud_pl,args.batch_size)
+    samplepts=resample(samplepts,args.ptnum)
 
     with tf.variable_scope('ge'):
         pred, end_points = get_model(pointcloud_pl, is_training_pl, bn_decay=None)
         correct = tf.equal(tf.argmax(pred, 1), tf.cast(label_pl,tf.int64))
+
     filename='cls_result.txt'
     f=open(filename,'a')
+
     config=tf.ConfigProto(allow_soft_placement=True,log_device_placement=False)
     config.gpu_options.allow_growth=True
+
     with tf.Session(config=config) as sess:
         var=tf.GraphKeys.GLOBAL_VARIABLES
-        samvar=tf.get_collection(var,scope='sam')
-        istrain=tf.get_collection(var,scope='is_training')
-         
+
+        samvar=tf.get_collection(var,scope='sam') 
         sam_saver=tf.train.Saver(var_list=samvar)
+
         gevar=tf.get_collection(var,scope='ge')
         ge_saver=tf.train.Saver(var_list=gevar)
 
-        sam_saver.restore(sess, tf.train.latest_checkpoint('./samfiles'))
-        ge_saver.restore(sess, tf.train.latest_checkpoint('./pn_cls'))
-        sess.run(tf.assign(istrain[0],False))
-        testfiles=getdata.getfile(os.path.join(DATA_DIR,'test_files.txt'))
+        if os.path.exists(os.path.join(args.savepath,'checkpoint')):
+            sam_saver.restore(sess, tf.train.latest_checkpoint(args.savepath))
+        else:
+            print('There is no trained checkpoint!')
+            assert False
+
+        if os.path.exists(os.path.join(args.prepath,'checkpoint')):
+            ge_saver.restore(sess, tf.train.latest_checkpoint(args.prepath))
+        else:
+            print('There is no pretrained checkpoint!')
+            assert False
+
+        testfiles=getdata.getfile(os.path.join(args.filepath,'test_files.txt'))
 
         err_list=[]
         for i in range(len(testfiles)):
-            testdata,label = getdata.load_h5label(os.path.join(DATA_DIR, testfiles[i]))
+            testdata,label = getdata.load_h5label(os.path.join(args.filepath, testfiles[i]))
             testdata=get_normal(testdata,True)
              
-            allnum=int(len(testdata)/BATCH_SIZE)*BATCH_SIZE
-            batch_num=int(allnum/BATCH_SIZE)
+            allnum=int(len(testdata)/args.batch_size)*args.batch_size
+            batch_num=int(allnum/args.batch_size)
+
             for batch in range(batch_num):
-                start_idx = (batch * BATCH_SIZE) % allnum
-                end_idx=(batch*BATCH_SIZE)%allnum+BATCH_SIZE
+                start_idx = (batch * args.batch_size) % allnum
+                end_idx=(batch*args.batch_size)%allnum+args.batch_size
                 batch_point=testdata[start_idx:end_idx]
                 sampts=sess.run(samplepts,feed_dict={pointcloud_pl:batch_point})
                 err_list.append(sess.run(correct,feed_dict={pointcloud_pl:sampts,outpts:batch_point,label_pl:np.squeeze(label[start_idx:end_idx]),is_training_pl:False}))
-        cls=np.sum(err_list)/len(BATCH_SIZE*err_list)
+        cls=np.sum(err_list)/len(args.batch_size*err_list)
         print(cls)
         f.write(str(cls)+'\n')
         f.close()
-
-
-
-
-        
+ 
 if __name__=='__main__':
-    evaluate()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
+    parser.add_argument('--ptnum', type=int, default=2048, help='The number of points')
+    parser.add_argument('--knum', type=int, default=32, help='The number of sampled points')
+    parser.add_argument('--filepath', type=str, default='./data', help='The path of test data')
+    parser.add_argument('--savepath', type=str, default='./modelvv_classify/', help='The path of saved checkpoint')
+    parser.add_argument('--prepath', type=str, default='./pn_cls/', help='The path of pretrained checkpoint')
+
+    args=parser.parse_args()
+    evaluate(args)

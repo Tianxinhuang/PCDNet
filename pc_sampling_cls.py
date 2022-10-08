@@ -17,6 +17,7 @@ from provider import shuffle_data,shuffle_points,rotate_point_cloud,jitter_point
 #from pointnet_cls import get_model,get_loss
 from pointnet_cls import get_model,get_loss#,get_bn_decay
 from samplenet import SoftProjection,get_project_loss
+import argparse
 
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
 tf.set_random_seed(1)
