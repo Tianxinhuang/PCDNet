@@ -36,7 +36,7 @@ bash compile.sh
 
 The pre-trained reconstruction and recognition networks are conducted following [S-Net](https://github.com/orendv/learning_to_sample.git). They should be included in the parameter (`--prepath`). 
 
-2. Train
+2. Training
 
 For the reconstruction task,
 ```
@@ -50,7 +50,7 @@ Python3 pc_sampling_cls.py
 
 Note that the path of data (`--filepath`)  should be edited according to your setting.
 
-3. Test
+3. Evaluation
 
 For the reconstruction task,
 ```
