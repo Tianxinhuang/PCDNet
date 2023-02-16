@@ -103,6 +103,9 @@ def evaluate(args):
         gevar=tf.get_collection(var,scope='ge')
         ge_saver=tf.train.Saver(var_list=gevar)
 
+        istrain=tf.get_collection(var,scope='is_training')
+        sess.run(tf.assign(istrain[0],False)) 
+
         if os.path.exists(os.path.join(args.savepath,'checkpoint')):
             sam_saver.restore(sess, tf.train.latest_checkpoint(args.savepath))
         else:
